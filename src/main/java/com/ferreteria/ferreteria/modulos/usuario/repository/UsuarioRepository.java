@@ -13,6 +13,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
 
     Optional<Usuario> findByCuenta(String cuenta);
     Optional<Usuario> findByEmail(String email);
+    Optional<Usuario> findByTokenActivacion(String token);
 
     // Consulta con JOIN FETCH para traer el Rol cargado
     @Query("SELECT DISTINCT u FROM Usuario u LEFT JOIN FETCH u.rol")

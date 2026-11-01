@@ -53,6 +53,12 @@ public class Usuario {
     @Column(name = "num_intentos")
     private Short numIntentos;
 
+    @Column(name = "token_activacion", length = 64)
+    private String tokenActivacion;
+
+    @Column(name = "fec_token")
+    private LocalDateTime fecToken;
+
     @Column(name = "fec_registro")
     private LocalDateTime fecRegistro;
 
@@ -63,4 +69,9 @@ public class Usuario {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_rol")
     private Rol rol;
+    
+    public String getTokenActivacion() { return tokenActivacion; }
+    public void setTokenActivacion(String t) { this.tokenActivacion = t; }
+    public LocalDateTime getFecToken() { return fecToken; }
+    public void setFecToken(LocalDateTime f) { this.fecToken = f; }
 }

@@ -51,7 +51,11 @@ public class UsuarioController {
         return ResponseEntity.badRequest().body(e.getMessage());
     }
 }
-
+    @PostMapping("/{id}/reenviar")
+public ResponseEntity<Void> reenviar(@PathVariable Integer id) {
+    usuarioService.reenviarActivacion(id);
+    return ResponseEntity.ok().build();
+}
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Integer id) {

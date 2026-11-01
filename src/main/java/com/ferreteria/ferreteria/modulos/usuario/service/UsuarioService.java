@@ -8,6 +8,10 @@ import com.ferreteria.ferreteria.modulos.usuario.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.javamail.JavaMailSender;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,15 +26,25 @@ public class UsuarioService {
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
     private final BitacoraService bitacora;
+    private final JavaMailSender mailSender;
+
+    // Local: http://localhost:4200. Producción: FRONTEND_URL con la URL del frontend en Render
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    @Value("${spring.mail.username}")
+    private String remitente;
 
     public UsuarioService(UsuarioRepository usuarioRepository,
-                      RolRepository rolRepository,
-                      PasswordEncoder passwordEncoder,
-                      BitacoraService bitacora) {
-    this.usuarioRepository = usuarioRepository;
-    this.rolRepository = rolRepository;
-    this.passwordEncoder = passwordEncoder;
-    this.bitacora = bitacora;
+                          RolRepository rolRepository,
+                          PasswordEncoder passwordEncoder,
+                          BitacoraService bitacora,
+                          JavaMailSender mailSender) {
+        this.usuarioRepository = usuarioRepository;
+        this.rolRepository = rolRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.bitacora = bitacora;
+        this.mailSender = mailSender;
     }
 
     public List<UsuarioResponseDTO> listarTodos() {
@@ -40,28 +54,32 @@ public class UsuarioService {
     public UsuarioResponseDTO crear(Map<String, String> datos) {
         Usuario u = new Usuario();
         u.setCuenta(datos.get("cuenta"));
-        u.setHashClave(passwordEncoder.encode(datos.get("clave")));
+        u.setHashClave(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
         u.setNombres(datos.get("nombresCompleto"));
         u.setApellidos("");
         u.setEmail(datos.getOrDefault("email", ""));
         u.setTelefono(datos.getOrDefault("telefono", ""));
         u.setDni(datos.getOrDefault("dni", ""));
-            if (u.getDni() != null && !u.getDni().isBlank()
+        if (u.getDni() != null && !u.getDni().isBlank()
                 && usuarioRepository.findByDni(u.getDni()).isPresent()) {
-                throw new RuntimeException("El DNI ya está registrado.");
-                }
+            throw new RuntimeException("El DNI ya está registrado.");
+        }
         u.setTipoContrato(datos.get("tipoContrato"));
         u.setFecInicio(aFecha(datos.get("fecInicio")));
         u.setFecFin(aFecha(datos.get("fecFin")));
-        u.setEstado(datos.getOrDefault("estado", "ACTIVO"));
+        u.setEstado("INACTIVO");
         u.setNumIntentos((short) 0);
         u.setFecRegistro(LocalDateTime.now());
         u.setFecModifica(LocalDateTime.now());
         u.setFecAcceso(LocalDateTime.now());
         u.setRol(buscarRol(datos.get("codigoRol")));
+        String token = java.util.UUID.randomUUID().toString().replace("-", "");
+        u.setTokenActivacion(token);
+        u.setFecToken(LocalDateTime.now().plusHours(24));
         Usuario guardado = usuarioRepository.save(u);
-            bitacora.registrar("USUARIOS", "CREAR", "Creó el usuario " + guardado.getCuenta());
-            return aDto(guardado);
+        bitacora.registrar("USUARIOS", "CREAR", "Creó el usuario " + guardado.getCuenta());
+        enviarActivacion(guardado);
+        return aDto(guardado);
     }
 
     public UsuarioResponseDTO actualizar(Integer id, Map<String, String> datos) {
@@ -69,13 +87,13 @@ public class UsuarioService {
 
         StringBuilder c = new StringBuilder();
         if (!java.util.Objects.equals(u.getNombres(), datos.get("nombresCompleto")))
-                c.append("Nombre: ").append(u.getNombres()).append(" → ").append(datos.get("nombresCompleto")).append("; ");
+            c.append("Nombre: ").append(u.getNombres()).append(" → ").append(datos.get("nombresCompleto")).append("; ");
         if (!java.util.Objects.equals(u.getEmail(), datos.get("email")))
-                c.append("Correo: ").append(u.getEmail()).append(" → ").append(datos.get("email")).append("; ");
+            c.append("Correo: ").append(u.getEmail()).append(" → ").append(datos.get("email")).append("; ");
         if (!java.util.Objects.equals(u.getTelefono(), datos.get("telefono")))
-                c.append("Teléfono: ").append(u.getTelefono()).append(" → ").append(datos.get("telefono")).append("; ");
+            c.append("Teléfono: ").append(u.getTelefono()).append(" → ").append(datos.get("telefono")).append("; ");
         if (!java.util.Objects.equals(u.getEstado(), datos.get("estado")))
-                c.append("estado: ").append(u.getEstado()).append(" → ").append(datos.get("estado")).append("; ");
+            c.append("estado: ").append(u.getEstado()).append(" → ").append(datos.get("estado")).append("; ");
 
         if (datos.get("nombresCompleto") != null) {
             u.setNombres(datos.get("nombresCompleto"));
@@ -88,14 +106,14 @@ public class UsuarioService {
         }
         if (datos.get("dni") != null) {
             String dniNuevo = datos.get("dni");
-                usuarioRepository.findByDni(dniNuevo).ifPresent(otro -> {
-        if (!otro.getIdUsuario().equals(u.getIdUsuario())) {
-            throw new RuntimeException("El DNI ya está registrado.");
-        }
-             });
+            usuarioRepository.findByDni(dniNuevo).ifPresent(otro -> {
+                if (!otro.getIdUsuario().equals(u.getIdUsuario())) {
+                    throw new RuntimeException("El DNI ya está registrado.");
+                }
+            });
             u.setDni(dniNuevo);
         }
-        
+
         if (datos.get("tipoContrato") != null) {
             u.setTipoContrato(datos.get("tipoContrato"));
         }
@@ -116,9 +134,55 @@ public class UsuarioService {
         }
         u.setFecModifica(LocalDateTime.now());
         Usuario guardado = usuarioRepository.save(u);
-            bitacora.registrar("USUARIOS", "EDITAR",
-                "Editó a " + u.getCuenta() + ". " + (c.length() == 0 ? "Sin cambios." : c.toString()));
-            return aDto(guardado);
+        bitacora.registrar("USUARIOS", "EDITAR",
+            "Editó a " + u.getCuenta() + ". " + (c.length() == 0 ? "Sin cambios." : c.toString()));
+        return aDto(guardado);
+    }
+
+    public void reenviarActivacion(Integer id) {
+        Usuario u = usuarioRepository.findById(id).orElseThrow();
+        if (!"INACTIVO".equals(u.getEstado())) return;
+        String token = java.util.UUID.randomUUID().toString().replace("-", "");
+        u.setTokenActivacion(token);
+        u.setFecToken(LocalDateTime.now().plusHours(24));
+        usuarioRepository.save(u);
+        enviarActivacion(u);
+    }
+
+    private void enviarActivacion(Usuario u) {
+        String enlace = frontendUrl + "/activar?token=" + u.getTokenActivacion();
+        try {
+            MimeMessage mensaje = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
+            helper.setFrom(remitente);
+            helper.setTo(u.getEmail());
+            helper.setSubject("Activa tu cuenta - La Solución Ferretera");
+            String html = """
+                <div style="background:#f4f4f5; padding:32px 12px; font-family:Arial, sans-serif;">
+                  <div style="max-width:460px; margin:auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06);">
+                    <div style="background:#f97316; padding:22px 28px; text-align:center;">
+                      <div style="color:#fff; font-size:13px; letter-spacing:2px;">LA SOLUCIÓN</div>
+                      <div style="color:#fff; font-size:22px; font-weight:bold;">Ferretera</div>
+                    </div>
+                    <div style="padding:32px 28px; color:#1f2937;">
+                      <p style="margin:0 0 8px;">Hola <strong>%s</strong>,</p>
+                      <p style="margin:0 0 20px; color:#4b5563;">Tu cuenta fue creada. Para activarla y crear tu clave, pulsa el botón. El enlace vence en 24 horas.</p>
+                      <div style="text-align:center; margin:24px 0;">
+                        <a href="%s" style="background:#f97316; color:#fff; text-decoration:none; padding:12px 28px; border-radius:8px; font-weight:bold;">Activar cuenta</a>
+                      </div>
+                      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">Si no solicitaste esto, ignora el correo.</p>
+                    </div>
+                    <div style="background:#fafafa; padding:14px 28px; text-align:center; font-size:12px; color:#9ca3af;">
+                      La Solución Ferretera · Km. 08 Carretera Piura – Chulucanas
+                    </div>
+                  </div>
+                </div>
+                """.formatted(u.getNombres(), enlace);
+            helper.setText(html, true);
+            mailSender.send(mensaje);
+        } catch (Exception e) {
+            System.out.println("No se pudo enviar la activación: " + e.getMessage());
+        }
     }
 
     private Rol buscarRol(String codigo) {

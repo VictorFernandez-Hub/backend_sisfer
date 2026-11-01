@@ -262,4 +262,20 @@ public class AuthController {
             this.vence = vence;
         }
     }
+
+    @PostMapping("/activar")
+public ResponseEntity<String> activar(@RequestBody Map<String, String> datos) {
+    String token = datos.get("token");
+    String clave = datos.get("clave");
+    Usuario u = usuarioRepository.findByTokenActivacion(token).orElse(null);
+    if (u == null || u.getFecToken() == null || u.getFecToken().isBefore(LocalDateTime.now())) {
+        return ResponseEntity.badRequest().body("Enlace inválido o vencido.");
+    }
+    u.setHashClave(passwordEncoder.encode(clave));
+    u.setEstado("ACTIVO");
+    u.setTokenActivacion(null);
+    u.setFecToken(null);
+    usuarioRepository.save(u);
+    return ResponseEntity.ok("Cuenta activada.");
+}
 }

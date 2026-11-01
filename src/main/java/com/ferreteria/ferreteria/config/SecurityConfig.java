@@ -61,11 +61,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/proveedores/**").authenticated()
 
                 .requestMatchers("/api/ventas/**")
-                    .hasAnyAuthority("ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR")
                 .requestMatchers("/api/compras/**")
-                    .hasAnyAuthority("ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO")
                 .requestMatchers("/api/reportes/**")
-                    .hasAnyAuthority("ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "GERENTE", "ROLE_GERENTE")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "GERENTE", "ROLE_GERENTE")
 
                 .anyRequest().authenticated()
             );
