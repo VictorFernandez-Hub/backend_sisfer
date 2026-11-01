@@ -1,5 +1,6 @@
 package com.ferreteria.ferreteria.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -23,6 +24,9 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -72,8 +76,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Angular puede correr en 4200 (npm start) o en otro puerto (depuración de VS Code)
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        // Local: Angular en cualquier puerto de localhost. Producción: CORS_ALLOWED_ORIGINS con la URL del frontend
+        configuration.setAllowedOriginPatterns(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
