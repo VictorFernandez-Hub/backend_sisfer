@@ -78,7 +78,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         // Local: Angular en cualquier puerto de localhost. Producción: CORS_ALLOWED_ORIGINS con la URL del frontend
         configuration.setAllowedOriginPatterns(allowedOrigins);
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // PATCH lo usa /api/productos/{id}/estado (activar/desactivar)
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
 
