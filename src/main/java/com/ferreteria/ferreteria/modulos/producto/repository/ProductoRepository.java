@@ -13,17 +13,22 @@ import java.util.Optional;
 public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
     // JOIN FETCH trae categoría, marca y unidad en una sola consulta (evita N+1)
-    // LEFT JOIN en proveedor: los productos antiguos pueden no tenerlo
+    // LEFT JOIN en proveedor: los productos antiguos pueden no tenerlo.
+    // Los ELIMINADOS no se muestran: solo se conservan por su historial.
     @Query("SELECT p FROM Producto p JOIN FETCH p.categoria JOIN FETCH p.marca JOIN FETCH p.unidad " +
-           "LEFT JOIN FETCH p.proveedor ORDER BY p.nombre")
+           "LEFT JOIN FETCH p.proveedor WHERE p.estado <> 'ELIMINADO' ORDER BY p.nombre")
     List<Producto> findAllConRelaciones();
+
+    // Incluye los ELIMINADOS: su código sigue ocupado
+    @Query("SELECT p.codigo FROM Producto p")
+    List<String> findTodosLosCodigos();
 
     @Query("SELECT p FROM Producto p JOIN FETCH p.categoria JOIN FETCH p.marca JOIN FETCH p.unidad " +
            "LEFT JOIN FETCH p.proveedor WHERE p.estado = :estado ORDER BY p.nombre")
     List<Producto> findByEstadoConRelaciones(@Param("estado") String estado);
 
     @Query("SELECT p FROM Producto p JOIN FETCH p.categoria JOIN FETCH p.marca JOIN FETCH p.unidad " +
-           "LEFT JOIN FETCH p.proveedor WHERE p.id_producto = :id")
+           "LEFT JOIN FETCH p.proveedor WHERE p.id_producto = :id AND p.estado <> 'ELIMINADO'")
     Optional<Producto> findByIdConRelaciones(@Param("id") Long id);
 
     // Equivale a la restricción unq_producto_codigo

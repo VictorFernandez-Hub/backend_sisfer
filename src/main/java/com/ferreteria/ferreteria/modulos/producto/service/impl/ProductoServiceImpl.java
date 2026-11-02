@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 @Service
@@ -211,8 +213,7 @@ public class ProductoServiceImpl implements ProductoService {
         if (nuevoEstado == null || !nuevoEstado.toUpperCase().matches("^(ACTIVO|INACTIVO)$")) {
             throw new IllegalArgumentException("El estado debe ser ACTIVO o INACTIVO");
         }
-        Producto producto = productoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con ID: " + id));
+        Producto producto = buscarNoEliminado(id);
         String estado = nuevoEstado.toUpperCase();
         if (estado.equals(producto.getEstado())) return;
         producto.setEstado(estado);
@@ -224,27 +225,60 @@ public class ProductoServiceImpl implements ProductoService {
     @Override
     @Transactional
     public void eliminar(Long id) {
-        Producto producto = productoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con ID: " + id));
+        Producto producto = buscarNoEliminado(id);
 
-        // Baja lógica: con historial solo se desactiva, para no romper el kardex ni los comprobantes
-        if (tieneMovimientos(id)) {
+        // Primero se desactiva y luego se borra desde "Ver inactivos": evita borrar algo en uso por error
+        if (!"INACTIVO".equals(producto.getEstado())) {
             throw new IllegalArgumentException(
-                    "El producto " + producto.getCodigo() + " tiene movimientos en el kardex (compras, ventas o ajustes). "
-                    + "No se puede eliminar; déjelo INACTIVO para conservar su historial.");
+                    "Solo se pueden borrar productos INACTIVOS. Desactive " + producto.getCodigo() + " primero.");
         }
-        if (producto.getStock_actual() != null && producto.getStock_actual().compareTo(BigDecimal.ZERO) > 0) {
-            throw new IllegalArgumentException(
-                    "El producto tiene stock y no se puede eliminar. Déjelo INACTIVO.");
+
+        boolean tieneStock = producto.getStock_actual() != null
+                && producto.getStock_actual().compareTo(BigDecimal.ZERO) > 0;
+
+        // Con stock o historial no se puede borrar la fila sin romper el kardex, las compras
+        // y las ventas: se marca ELIMINADO, desaparece de la aplicación y el historial queda intacto.
+        if (tieneStock || tieneMovimientos(id)) {
+            producto.setEstado("ELIMINADO");
+            productoRepository.save(producto);
+            bitacora.registrar("PRODUCTOS", "ELIMINAR", "Eliminó el producto " + producto.getCodigo()
+                    + " (se conserva su historial de kardex)");
+            return;
         }
+
+        // Sin movimientos (registro hecho por error): se borra de verdad
         try {
             productoRepository.delete(producto);
+            productoRepository.flush(); // Fuerza el DELETE aquí para capturar una FK no prevista
             bitacora.registrar("PRODUCTOS", "ELIMINAR", "Eliminó el producto " + producto.getCodigo());
-            productoRepository.flush(); // Fuerza el DELETE aquí para capturar las FK (compras, ventas, kardex)
         } catch (DataIntegrityViolationException ex) {
             throw new IllegalArgumentException(
-                    "No se puede eliminar el producto porque tiene movimientos registrados. Cámbielo a INACTIVO.");
+                    "No se pudo eliminar el producto porque otra tabla lo referencia.");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String siguienteCodigo() {
+        // Menor número libre, contando también los ELIMINADOS: su código sigue ocupado en la base
+        Pattern numeroFinal = Pattern.compile("(\\d+)$");
+        Set<Integer> usados = new HashSet<>();
+        for (String codigo : productoRepository.findTodosLosCodigos()) {
+            Matcher m = numeroFinal.matcher(codigo);
+            if (m.find()) usados.add(Integer.parseInt(m.group(1)));
+        }
+        int n = 1;
+        while (usados.contains(n)) n++;
+        return String.format("HER-%03d", n);
+    }
+
+    private Producto buscarNoEliminado(Long id) {
+        Producto producto = productoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con ID: " + id));
+        if ("ELIMINADO".equals(producto.getEstado())) {
+            throw new ResourceNotFoundException("Producto no encontrado con ID: " + id);
+        }
+        return producto;
     }
 
     // =========================================================================

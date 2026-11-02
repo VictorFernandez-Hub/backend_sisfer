@@ -40,6 +40,11 @@ public class ProductoController {
         return ResponseEntity.ok(productoService.listarActivos());
     }
 
+    @GetMapping("/siguiente-codigo")
+    public ResponseEntity<Map<String, String>> siguienteCodigo() {
+        return ResponseEntity.ok(Map.of("codigo", productoService.siguienteCodigo()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ProductoDTO> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(productoService.obtenerPorId(id));

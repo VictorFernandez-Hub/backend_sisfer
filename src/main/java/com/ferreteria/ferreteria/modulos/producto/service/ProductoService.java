@@ -15,6 +15,9 @@ public interface ProductoService {
 
     void eliminar(Long id);
 
+    // Próximo código libre (HER-001...), contando los productos ELIMINADOS
+    String siguienteCodigo();
+
     // Catálogos para los combos del formulario
     List<CatalogoDTO> listarCategorias();
     List<CatalogoDTO> listarMarcas();
