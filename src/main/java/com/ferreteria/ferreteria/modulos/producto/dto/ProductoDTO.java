@@ -69,6 +69,9 @@ public class ProductoDTO {
 
     private String nivel_stock; // OK, STOCK_MINIMO o AGOTADO (igual que v_alerta_stock)
 
+    // Solo lectura: false si tiene movimientos (kardex, compras, ventas o ajustes) y solo puede desactivarse
+    private Boolean eliminable;
+
     @Pattern(regexp = "^(ACTIVO|INACTIVO)$", message = "El estado debe ser ACTIVO o INACTIVO")
     private String estado;
 
@@ -135,6 +138,9 @@ public class ProductoDTO {
 
     public String getNivel_stock() { return nivel_stock; }
     public void setNivel_stock(String nivel_stock) { this.nivel_stock = nivel_stock; }
+
+    public Boolean getEliminable() { return eliminable; }
+    public void setEliminable(Boolean eliminable) { this.eliminable = eliminable; }
 
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }

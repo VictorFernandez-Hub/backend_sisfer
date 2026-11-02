@@ -29,8 +29,10 @@ import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -67,16 +69,18 @@ public class ProductoServiceImpl implements ProductoService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductoDTO> listarTodos() {
+        Set<Long> conMovimientos = productosConMovimientos();
         return productoRepository.findAllConRelaciones().stream()
-                .map(this::convertirADTO)
+                .map(p -> convertirADTO(p, conMovimientos))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProductoDTO> listarActivos() {
+        Set<Long> conMovimientos = productosConMovimientos();
         return productoRepository.findByEstadoConRelaciones("ACTIVO").stream()
-                .map(this::convertirADTO)
+                .map(p -> convertirADTO(p, conMovimientos))
                 .toList();
     }
 
@@ -85,7 +89,9 @@ public class ProductoServiceImpl implements ProductoService {
     public ProductoDTO obtenerPorId(Long id) {
         Producto producto = productoRepository.findByIdConRelaciones(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con ID: " + id));
-        return convertirADTO(producto);
+        ProductoDTO dto = convertirADTO(producto);
+        dto.setEliminable(!tieneMovimientos(id));
+        return dto;
     }
 
     @Override
@@ -207,8 +213,12 @@ public class ProductoServiceImpl implements ProductoService {
         }
         Producto producto = productoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con ID: " + id));
-        producto.setEstado(nuevoEstado.toUpperCase());
+        String estado = nuevoEstado.toUpperCase();
+        if (estado.equals(producto.getEstado())) return;
+        producto.setEstado(estado);
         productoRepository.save(producto);
+        bitacora.registrar("PRODUCTOS", "ACTIVO".equals(estado) ? "REACTIVAR" : "DAR_BAJA",
+                ("ACTIVO".equals(estado) ? "Reactivó" : "Dio de baja (INACTIVO)") + " el producto " + producto.getCodigo());
     }
 
     @Override
@@ -217,9 +227,15 @@ public class ProductoServiceImpl implements ProductoService {
         Producto producto = productoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con ID: " + id));
 
+        // Baja lógica: con historial solo se desactiva, para no romper el kardex ni los comprobantes
+        if (tieneMovimientos(id)) {
+            throw new IllegalArgumentException(
+                    "El producto " + producto.getCodigo() + " tiene movimientos en el kardex (compras, ventas o ajustes). "
+                    + "No se puede eliminar; déjelo INACTIVO para conservar su historial.");
+        }
         if (producto.getStock_actual() != null && producto.getStock_actual().compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException(
-                    "No se puede eliminar un producto con stock. Cámbielo a INACTIVO.");
+                    "El producto tiene stock y no se puede eliminar. Déjelo INACTIVO.");
         }
         try {
             productoRepository.delete(producto);
@@ -330,6 +346,25 @@ public class ProductoServiceImpl implements ProductoService {
         jdbc.update("UPDATE producto SET stock_actual = ? WHERE id_producto = ?", cantidad, idProducto);
     }
 
+    // Toda tabla que referencia al producto con un movimiento de inventario
+    private static final String SQL_PRODUCTOS_CON_MOVIMIENTOS =
+            "SELECT id_producto FROM kardex " +
+            "UNION SELECT id_producto FROM linea_compra " +
+            "UNION SELECT id_producto FROM linea_venta " +
+            "UNION SELECT id_producto FROM linea_ajuste";
+
+    /** Ids de productos con historial: una sola consulta para todo el listado */
+    private Set<Long> productosConMovimientos() {
+        return new HashSet<>(jdbc.queryForList(SQL_PRODUCTOS_CON_MOVIMIENTOS, Long.class));
+    }
+
+    private boolean tieneMovimientos(Long idProducto) {
+        Integer total = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM (" + SQL_PRODUCTOS_CON_MOVIMIENTOS + ") m WHERE m.id_producto = ?",
+                Integer.class, idProducto);
+        return total != null && total > 0;
+    }
+
     private Integer obtenerIdUsuarioActual() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
@@ -360,6 +395,12 @@ public class ProductoServiceImpl implements ProductoService {
         if (actual.compareTo(BigDecimal.ZERO) <= 0) return "AGOTADO";
         if (actual.compareTo(minimo) <= 0) return "STOCK_MINIMO";
         return "OK";
+    }
+
+    private ProductoDTO convertirADTO(Producto producto, Set<Long> conMovimientos) {
+        ProductoDTO dto = convertirADTO(producto);
+        dto.setEliminable(!conMovimientos.contains(producto.getId_producto()));
+        return dto;
     }
 
     private ProductoDTO convertirADTO(Producto producto) {
