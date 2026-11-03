@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
@@ -31,13 +33,24 @@ public class ProductoController {
     @GetMapping
     public ResponseEntity<List<ProductoDTO>> listarTodos() {
         bitacora.registrar("PRODUCTOS", "CONSULTAR", "Consultó el listado de productos");
-        return ResponseEntity.ok(productoService.listarTodos());
+        return ResponseEntity.ok(sinCostoParaVendedor(productoService.listarTodos()));
     }
 
     // Para combos de selección (compras, ventas, ajustes)
     @GetMapping("/activos")
     public ResponseEntity<List<ProductoDTO>> listarActivos() {
-        return ResponseEntity.ok(productoService.listarActivos());
+        return ResponseEntity.ok(sinCostoParaVendedor(productoService.listarActivos()));
+    }
+
+    // El vendedor solo trabaja con el precio de venta: el costo de compra no le llega
+    private List<ProductoDTO> sinCostoParaVendedor(List<ProductoDTO> productos) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean vendedor = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "VENDEDOR".equals(a.getAuthority()) || "ROLE_VENDEDOR".equals(a.getAuthority()));
+        if (vendedor) {
+            productos.forEach(p -> p.setPrecio_compra(null));
+        }
+        return productos;
     }
 
     @GetMapping("/siguiente-codigo")
@@ -47,7 +60,7 @@ public class ProductoController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductoDTO> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(productoService.obtenerPorId(id));
+        return ResponseEntity.ok(sinCostoParaVendedor(List.of(productoService.obtenerPorId(id))).get(0));
     }
 
     @PostMapping

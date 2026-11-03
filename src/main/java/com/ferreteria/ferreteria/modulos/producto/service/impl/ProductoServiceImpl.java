@@ -177,6 +177,10 @@ public class ProductoServiceImpl implements ProductoService {
         // Si no se envían precios se conservan los actuales
         if (dto.getPrecio_compra() == null) dto.setPrecio_compra(producto.getPrecio_compra());
         if (dto.getPrecio_venta() == null) dto.setPrecio_venta(producto.getPrecio_venta());
+        // Regla del negocio: el precio de venta solo lo cambia el administrador del negocio
+        if (producto.getPrecio_venta().compareTo(dto.getPrecio_venta()) != 0 && !esAdminNegocio()) {
+            throw new IllegalArgumentException("Solo el administrador del negocio puede cambiar el precio de venta.");
+        }
         if (producto.getPrecio_compra().compareTo(dto.getPrecio_compra()) != 0)
             c.append("Precio de Compra: ").append(producto.getPrecio_compra()).append(" → ").append(dto.getPrecio_compra()).append("; ");
         if (producto.getPrecio_venta().compareTo(dto.getPrecio_venta()) != 0)
@@ -407,6 +411,12 @@ public class ProductoServiceImpl implements ProductoService {
         return usuarioRepository.findByCuenta(auth.getName())
                 .map(Usuario::getIdUsuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario de sesión no encontrado: " + auth.getName()));
+    }
+
+    private boolean esAdminNegocio() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "ADMIN_NEGOCIO".equals(a.getAuthority()) || "ROLE_ADMIN_NEGOCIO".equals(a.getAuthority()));
     }
 
     /** Regla de negocio: no se vende por debajo del costo */

@@ -5,6 +5,7 @@ import com.ferreteria.ferreteria.modulos.cliente.dto.ClienteDTO;
 import com.ferreteria.ferreteria.modulos.cliente.model.Cliente;
 import com.ferreteria.ferreteria.modulos.cliente.repository.ClienteRepository;
 import com.ferreteria.ferreteria.modulos.cliente.service.ClienteService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
@@ -13,6 +14,8 @@ import java.util.List;
 
 @Service
 public class ClienteServiceImpl implements ClienteService {
+
+    private static final String DOC_CLIENTE_VARIOS = "00000000";
 
     private final ClienteRepository clienteRepository;
     private final BitacoraService bitacora;
@@ -68,6 +71,7 @@ public class ClienteServiceImpl implements ClienteService {
 
     Cliente cliente = clienteRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado con ID: " + id));
+    protegerClienteVarios(cliente);
 
     if (!cliente.getNum_doc().equals(dto.getNum_doc()) && clienteRepository.existsByNumDoc(dto.getNum_doc())) {
         throw new IllegalArgumentException("El número de documento " + dto.getNum_doc() + " ya está en uso por otro cliente.");
@@ -117,8 +121,16 @@ public class ClienteServiceImpl implements ClienteService {
         }
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado con ID: " + id));
+        protegerClienteVarios(cliente);
         cliente.setEstado(nuevoEstado.toUpperCase());
         clienteRepository.save(cliente);
+    }
+
+    // "Cliente varios" es el que usan las boletas rápidas: si se cambia o se borra, ventas se queda sin él
+    private void protegerClienteVarios(Cliente cliente) {
+        if (DOC_CLIENTE_VARIOS.equals(cliente.getNum_doc())) {
+            throw new IllegalArgumentException("Cliente varios es un registro del sistema y no se puede modificar ni eliminar.");
+        }
     }
 
     /**
@@ -176,7 +188,14 @@ public class ClienteServiceImpl implements ClienteService {
     public void eliminar(Long id) {
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado con ID: " + id));
-        clienteRepository.delete(cliente);
+        protegerClienteVarios(cliente);
+        try {
+            clienteRepository.delete(cliente);
+            clienteRepository.flush(); // Fuerza el DELETE aquí para capturar la FK con ventas
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException(
+                    "No se puede eliminar el cliente porque tiene ventas registradas. Cámbielo a INACTIVO.");
+        }
         bitacora.registrar("CLIENTES", "ELIMINAR", "Eliminó el cliente " + id);
     }
 }
