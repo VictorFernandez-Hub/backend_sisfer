@@ -9,9 +9,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import jakarta.mail.internet.MimeMessage;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import com.ferreteria.ferreteria.modulos.seguridad.service.CorreoService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,25 +26,23 @@ public class UsuarioService {
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
     private final BitacoraService bitacora;
-    private final JavaMailSender mailSender;
+    private final CorreoService correoService;
+    private static final Logger log = LoggerFactory.getLogger(UsuarioService.class);
 
     // Local: http://localhost:4200. Producción: FRONTEND_URL con la URL del frontend en Render
     @Value("${app.frontend-url}")
     private String frontendUrl;
 
-    @Value("${spring.mail.username}")
-    private String remitente;
-
     public UsuarioService(UsuarioRepository usuarioRepository,
                           RolRepository rolRepository,
                           PasswordEncoder passwordEncoder,
                           BitacoraService bitacora,
-                          JavaMailSender mailSender) {
+                          CorreoService correoService) {
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
         this.passwordEncoder = passwordEncoder;
         this.bitacora = bitacora;
-        this.mailSender = mailSender;
+        this.correoService = correoService;
     }
 
     public List<UsuarioResponseDTO> listarTodos() {
@@ -152,11 +150,6 @@ public class UsuarioService {
     private void enviarActivacion(Usuario u) {
         String enlace = frontendUrl + "/activar?token=" + u.getTokenActivacion();
         try {
-            MimeMessage mensaje = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
-            helper.setFrom(remitente);
-            helper.setTo(u.getEmail());
-            helper.setSubject("Activa tu cuenta - La Solución Ferretera");
             String html = """
                 <div style="background:#f4f4f5; padding:32px 12px; font-family:Arial, sans-serif;">
                   <div style="max-width:460px; margin:auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06);">
@@ -178,10 +171,9 @@ public class UsuarioService {
                   </div>
                 </div>
                 """.formatted(u.getNombres(), enlace);
-            helper.setText(html, true);
-            mailSender.send(mensaje);
+            correoService.enviar(u.getEmail(), "Activa tu cuenta - La Solución Ferretera", html);
         } catch (Exception e) {
-            System.out.println("No se pudo enviar la activación: " + e.getMessage());
+            log.error("No se pudo enviar la activación a {}: {}", CorreoService.ocultar(u.getEmail()), e.getMessage(), e);
         }
     }
 

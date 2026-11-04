@@ -60,6 +60,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/productos/**", "/api/inventario/**").authenticated()
                 .requestMatchers("/api/proveedores/**").authenticated()
 
+                // El gerente solo consulta ventas (permiso VTA_VER). El administrador del sistema tiene acceso total.
+                .requestMatchers(HttpMethod.GET, "/api/ventas/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "GERENTE", "ROLE_GERENTE")
                 .requestMatchers("/api/ventas/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR")
                 .requestMatchers("/api/compras/**")

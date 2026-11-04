@@ -13,6 +13,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
 
     Optional<Usuario> findByCuenta(String cuenta);
     Optional<Usuario> findByEmail(String email);
+    // El email no es UNIQUE en la tabla: puede haber varias cuentas con el mismo correo
+    List<Usuario> findAllByEmailIgnoreCase(String email);
     Optional<Usuario> findByTokenActivacion(String token);
 
     // Consulta con JOIN FETCH para traer el Rol cargado
