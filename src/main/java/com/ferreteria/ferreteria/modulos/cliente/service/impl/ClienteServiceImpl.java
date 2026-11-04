@@ -122,8 +122,12 @@ public class ClienteServiceImpl implements ClienteService {
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado con ID: " + id));
         protegerClienteVarios(cliente);
+        String anterior = cliente.getEstado();
         cliente.setEstado(nuevoEstado.toUpperCase());
         clienteRepository.save(cliente);
+        bitacora.registrar("CLIENTES", "ACTIVO".equals(cliente.getEstado()) ? "ACTIVAR" : "DESACTIVAR", id,
+                "Cambió el estado del cliente " + cliente.getNombres() + " (" + cliente.getNum_doc() + "). Estado: "
+                        + anterior + " → " + cliente.getEstado());
     }
 
     // "Cliente varios" es el que usan las boletas rápidas: si se cambia o se borra, ventas se queda sin él
@@ -196,6 +200,7 @@ public class ClienteServiceImpl implements ClienteService {
             throw new IllegalArgumentException(
                     "No se puede eliminar el cliente porque tiene ventas registradas. Cámbielo a INACTIVO.");
         }
-        bitacora.registrar("CLIENTES", "ELIMINAR", "Eliminó el cliente " + id);
+        bitacora.registrar("CLIENTES", "ELIMINAR", id,
+                "Eliminó el cliente " + cliente.getNombres() + " (" + cliente.getNum_doc() + ")");
     }
 }

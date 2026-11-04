@@ -1,5 +1,7 @@
 package com.ferreteria.ferreteria.config;
 
+import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,7 +42,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, BitacoraService bitacora) throws Exception {
         http
             .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
@@ -53,25 +55,46 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/login", "/css/**", "/js/**", "/images/**", "/webjars/**")
                     .permitAll()
 
-                .requestMatchers("/api/usuarios/**", "/usuarios/**", "/api/roles/**", "/roles/**", "/api/bitacora/**")
-                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA")
+                // Seguridad: administrador del sistema o un rol con el módulo asignado en "Roles y accesos"
+                .requestMatchers("/api/usuarios/**", "/usuarios/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "MOD_USUARIOS")
+                .requestMatchers("/api/roles/**", "/roles/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "MOD_ROLES")
+                // Aviso de "ingresó al módulo": lo envía el frontend de cualquier usuario con sesión
+                .requestMatchers(HttpMethod.POST, "/api/bitacora/ingreso").authenticated()
+                .requestMatchers("/api/bitacora/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "MOD_BITACORA")
 
                 .requestMatchers("/api/clientes/**").authenticated()
                 .requestMatchers("/api/productos/**", "/api/inventario/**").authenticated()
                 .requestMatchers("/api/proveedores/**").authenticated()
 
+                // MOD_xxx = módulo asignado al rol en "Roles y accesos" (UserDetailsServiceImpl).
+                // Da acceso completo al módulo; así funcionan los roles creados desde la pantalla.
                 // El gerente solo consulta ventas (permiso VTA_VER). El administrador del sistema tiene acceso total.
                 .requestMatchers(HttpMethod.GET, "/api/ventas/**")
-                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "GERENTE", "ROLE_GERENTE")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "GERENTE", "ROLE_GERENTE", "MOD_VENTAS")
                 .requestMatchers("/api/ventas/**")
-                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "MOD_VENTAS")
+                // El gerente solo consulta las compras; registrar, confirmar y anular queda para los demás
+                .requestMatchers(HttpMethod.GET, "/api/compras/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "GERENTE", "ROLE_GERENTE", "MOD_COMPRAS")
                 .requestMatchers("/api/compras/**")
-                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "MOD_COMPRAS")
                 .requestMatchers("/api/reportes/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "GERENTE", "ROLE_GERENTE")
 
                 .anyRequest().authenticated()
-            );
+            )
+            // Un usuario con sesión que intenta usar algo que su rol no permite queda en la bitácora
+            .exceptionHandling(ex -> ex.accessDeniedHandler((request, response, denegado) -> {
+                String ruta = request.getRequestURI();
+                String[] partes = ruta.split("/");
+                String modulo = partes.length > 2 ? partes[2].toUpperCase() : "SISTEMA";
+                bitacora.registrarFallo(modulo, "ACCESO_DENEGADO", "",
+                        "Intentó " + request.getMethod() + " " + ruta + " sin permiso");
+                response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            }));
 
         return http.build();
     }

@@ -84,6 +84,7 @@ public class VentaController {
             throw new IllegalArgumentException("Esta venta se anuló en borrador y no tiene comprobante");
         }
         String nombre = (v.comprobante() != null ? v.comprobante().numeroCompleto() : "Proforma-" + v.numero()) + ".pdf";
+        bitacora.registrar("VENTAS", "DESCARGAR", id, "Descargó el PDF " + nombre + " de la venta " + v.numero());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
