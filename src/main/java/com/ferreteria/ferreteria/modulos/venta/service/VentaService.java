@@ -358,7 +358,9 @@ public class VentaService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return false;
         for (GrantedAuthority a : auth.getAuthorities()) {
-            if (ROL_ADMIN_NEGOCIO.equals(a.getAuthority()) || "ADMIN_NEGOCIO".equals(a.getAuthority())) {
+            // El administrador del sistema tiene los mismos permisos que el del negocio
+            if (ROL_ADMIN_NEGOCIO.equals(a.getAuthority()) || "ADMIN_NEGOCIO".equals(a.getAuthority())
+                    || "ROLE_ADMIN_SISTEMA".equals(a.getAuthority()) || "ADMIN_SISTEMA".equals(a.getAuthority())) {
                 return true;
             }
         }
