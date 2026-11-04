@@ -416,7 +416,9 @@ public class ProductoServiceImpl implements ProductoService {
     private boolean esAdminNegocio() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getAuthorities().stream()
-                .anyMatch(a -> "ADMIN_NEGOCIO".equals(a.getAuthority()) || "ROLE_ADMIN_NEGOCIO".equals(a.getAuthority()));
+                .anyMatch(a -> "ADMIN_NEGOCIO".equals(a.getAuthority()) || "ROLE_ADMIN_NEGOCIO".equals(a.getAuthority())
+                        // El administrador del sistema tiene los mismos permisos que el del negocio
+                        || "ADMIN_SISTEMA".equals(a.getAuthority()) || "ROLE_ADMIN_SISTEMA".equals(a.getAuthority()));
     }
 
     /** Regla de negocio: no se vende por debajo del costo */
