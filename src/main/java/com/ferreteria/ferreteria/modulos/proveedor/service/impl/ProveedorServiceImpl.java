@@ -129,8 +129,12 @@ public class ProveedorServiceImpl implements ProveedorService {
             throw new IllegalArgumentException("El estado debe ser ACTIVO o INACTIVO");
         }
         Proveedor proveedor = buscarProveedor(id);
+        String anterior = proveedor.getEstado();
         proveedor.setEstado(nuevoEstado.toUpperCase());
         proveedorRepository.save(proveedor);
+        bitacora.registrar("PROVEEDORES", "ACTIVO".equals(proveedor.getEstado()) ? "ACTIVAR" : "DESACTIVAR", id,
+                "Cambió el estado del proveedor " + proveedor.getRazon_social() + " (" + proveedor.getNum_doc()
+                        + "). Estado: " + anterior + " → " + proveedor.getEstado());
     }
 
     @Override
@@ -139,7 +143,8 @@ public class ProveedorServiceImpl implements ProveedorService {
         Proveedor proveedor = buscarProveedor(id);
         try {
             proveedorRepository.delete(proveedor);
-            bitacora.registrar("PROVEEDORES", "ELIMINAR", "Eliminó el proveedor " + proveedor.getRazon_social());
+            bitacora.registrar("PROVEEDORES", "ELIMINAR", id,
+                    "Eliminó el proveedor " + proveedor.getRazon_social() + " (" + proveedor.getNum_doc() + ")");
             proveedorRepository.flush(); // Fuerza el DELETE aquí para capturar la FK de compra
         } catch (DataIntegrityViolationException ex) {
             throw new IllegalArgumentException(

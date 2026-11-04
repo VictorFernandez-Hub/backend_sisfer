@@ -200,8 +200,12 @@ public class UsuarioService {
     }
 
     public void eliminar(Integer id) {
+        String eliminado = usuarioRepository.findById(id)
+                .map(u -> u.getCuenta() + " (" + u.getNombres() + " " + u.getApellidos()
+                        + (u.getRol() != null ? ", rol " + u.getRol().getCodigo() : "") + ")")
+                .orElse(String.valueOf(id));
         usuarioRepository.deleteById(id);
-        bitacora.registrar("USUARIOS", "ELIMINAR", "Eliminó el usuario " + id);
+        bitacora.registrar("USUARIOS", "ELIMINAR", id, "Eliminó el usuario " + eliminado);
     }
 
     private LocalDate aFecha(String valor) {

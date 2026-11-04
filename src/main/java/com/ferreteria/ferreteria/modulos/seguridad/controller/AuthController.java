@@ -5,6 +5,7 @@ import com.ferreteria.ferreteria.modulos.seguridad.dto.LoginRequestDTO;
 import com.ferreteria.ferreteria.modulos.usuario.model.Usuario;
 import com.ferreteria.ferreteria.modulos.usuario.repository.UsuarioRepository;
 import com.ferreteria.ferreteria.modulos.seguridad.service.CorreoService;
+import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
@@ -53,13 +54,20 @@ public class AuthController {
     private final Map<String, CodigoRecuperacion> codigos = new ConcurrentHashMap<>();
 
     private final BitacoraRepository bitacoraRepository;
+    // Registra en la bitácora inicios y cierres de sesión, intentos fallidos y bloqueos
+    private final BitacoraService bitacora;
+
+    // Atributo de sesión: evita registrar dos veces el cierre (logout + sesión destruida)
+    public static final String CIERRE_REGISTRADO = "BITACORA_CIERRE_REGISTRADO";
 
     // Spring entrega estos objetos al crear el controlador
     public AuthController(AuthenticationManager authenticationManager,
                           UsuarioRepository usuarioRepository,
                           PasswordEncoder passwordEncoder,
                           BitacoraRepository bitacoraRepository,
-                          CorreoService correoService) {
+                          CorreoService correoService,
+                          BitacoraService bitacora) {
+        this.bitacora = bitacora;
         this.authenticationManager = authenticationManager;
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
@@ -80,6 +88,8 @@ public class AuthController {
                 && "ACTIVO".equalsIgnoreCase(porVencer.getEstado())) {
             porVencer.setEstado("INACTIVO");
             usuarioRepository.save(porVencer);
+            bitacora.registrarUsuario(porVencer.getIdUsuario(), "SEGURIDAD", "LOGIN_RECHAZADO",
+                    "Intentó ingresar con el contrato vencido (" + porVencer.getFecFin() + "). La cuenta pasó a INACTIVO", false);
             return ResponseEntity.status(403).body(
                     "Su contrato ha finalizado y su cuenta quedó inactiva. Comuníquese con el administrador del negocio para renovarlo."
             );
@@ -94,17 +104,9 @@ public class AuthController {
             ingresado.setNumIntentos((short) 0);
             usuarioRepository.save(ingresado);
 
-            Bitacora b = new Bitacora();
-            b.setIdUsuario(ingresado.getIdUsuario());
-            b.setFecEvento(java.time.LocalDateTime.now());
-            b.setModulo("SEGURIDAD");
-            b.setAccion("LOGIN");
-            b.setTablaObj("usuario");
-            b.setIdRegistro(String.valueOf(ingresado.getIdUsuario()));
-            b.setDetalle("Ingresó al sistema");
-            b.setIpOrigen("local");
-            b.setExito(true);
-            bitacoraRepository.save(b);
+            String rol = ingresado.getRol() != null ? ingresado.getRol().getCodigo() : "sin rol";
+            bitacora.registrarUsuario(ingresado.getIdUsuario(), "SEGURIDAD", "LOGIN",
+                    "Inició sesión con el rol " + rol, true);
             }
 
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
@@ -127,10 +129,12 @@ public class AuthController {
                 roles
         ));
     } catch (org.springframework.security.authentication.LockedException e) {
+        registrarRechazo(loginRequest.getCuenta(), "Intentó ingresar con la cuenta BLOQUEADA");
         return ResponseEntity.status(403).body(
                 "Usuario bloqueado. Comunícate con el área de sistemas para la revisión."
         );
     } catch (org.springframework.security.authentication.DisabledException e) {
+        registrarRechazo(loginRequest.getCuenta(), "Intentó ingresar con la cuenta INACTIVA");
         return ResponseEntity.status(403).body(
                 "Usuario inactivo. Comunícate con el administrador del negocio."
         );
@@ -142,11 +146,15 @@ public class AuthController {
             if (intentos >= 3) {
                 fallido.setEstado("BLOQUEADO");
                 usuarioRepository.save(fallido);
+                bitacora.registrarUsuario(fallido.getIdUsuario(), "SEGURIDAD", "BLOQUEO",
+                        "Cuenta bloqueada por 3 intentos fallidos de contraseña", false);
                 return ResponseEntity.status(403).body(
                         "Usuario bloqueado por intentos fallidos. Comunícate con el área de sistemas."
                 );
             }
             usuarioRepository.save(fallido);
+            bitacora.registrarUsuario(fallido.getIdUsuario(), "SEGURIDAD", "LOGIN_FALLIDO",
+                    "Contraseña incorrecta. Intento " + intentos + " de 3", false);
             return ResponseEntity.status(401).body(
                     "Usuario o contraseña incorrectos. Intento " + intentos + " de 3."
             );
@@ -158,7 +166,13 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<String> logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
+        Authentication actual = SecurityContextHolder.getContext().getAuthentication();
+        if (actual != null && actual.isAuthenticated() && !"anonymousUser".equals(actual.getName())) {
+            usuarioRepository.findByCuenta(actual.getName()).ifPresent(u ->
+                    bitacora.registrarUsuario(u.getIdUsuario(), "SEGURIDAD", "LOGOUT", "Cerró sesión", true));
+        }
         if (session != null) {
+            session.setAttribute(CIERRE_REGISTRADO, Boolean.TRUE);
             session.invalidate();
         }
         SecurityContextHolder.clearContext();
@@ -215,6 +229,8 @@ public class AuthController {
                     "No se pudo enviar el correo en este momento. Intente nuevamente en unos minutos.");
         }
 
+        bitacora.registrarUsuario(usuario.getIdUsuario(), "SEGURIDAD", "SOLICITAR_CODIGO",
+                "Pidió un código para recuperar la clave", true);
         return ResponseEntity.ok("Código enviado.");
     }
 
@@ -257,19 +273,17 @@ public class AuthController {
         usuarioRepository.save(usuario);
         codigos.remove(email);
 
-        Bitacora b = new Bitacora();
-        b.setIdUsuario(usuario.getIdUsuario());
-        b.setFecEvento(LocalDateTime.now());
-        b.setModulo("SEGURIDAD");
-        b.setAccion("RECUPERAR_CLAVE");
-        b.setTablaObj("usuario");
-        b.setIdRegistro(String.valueOf(usuario.getIdUsuario()));
-        b.setDetalle("Cambió su clave con código enviado al correo");
-        b.setIpOrigen("local");
-        b.setExito(true);
-        bitacoraRepository.save(b);
+        bitacora.registrarUsuario(usuario.getIdUsuario(), "SEGURIDAD", "RECUPERAR_CLAVE",
+                "Cambió su clave con el código enviado al correo", true);
 
         return ResponseEntity.ok("Clave actualizada. Ya puede iniciar sesión.");
+    }
+
+    // Inicio de sesión rechazado de una cuenta que existe (bloqueada o inactiva)
+    private void registrarRechazo(String cuenta, String detalle) {
+        if (cuenta == null) return;
+        usuarioRepository.findByCuenta(cuenta).ifPresent(u ->
+                bitacora.registrarUsuario(u.getIdUsuario(), "SEGURIDAD", "LOGIN_RECHAZADO", detalle, false));
     }
 
     // Devuelve null si el código es válido, o el mensaje de error. Tras 5 fallos el código se anula
