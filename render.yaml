@@ -13,8 +13,12 @@ services:
         value: avnadmin
       - key: DB_PASSWORD
         sync: false
-      - key: MAIL_PASSWORD
+      # Clave API de Brevo (https://app.brevo.com > SMTP & API > API Keys). Render gratis bloquea SMTP.
+      - key: BREVO_API_KEY
         sync: false
+      # Remitente verificado en Brevo (Senders & IP > Senders)
+      - key: MAIL_FROM
+        value: ferreteria.lasolucion53@gmail.com
       - key: FRONTEND_URL
         value: https://sisfer-frontend.onrender.com
       - key: CORS_ALLOWED_ORIGINS
