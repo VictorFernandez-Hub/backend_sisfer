@@ -101,6 +101,10 @@ public class ProductoServiceImpl implements ProductoService {
     public ProductoDTO guardar(ProductoDTO dto) {
         normalizar(dto);
         validarPrecios(dto.getPrecio_compra(), dto.getPrecio_venta());
+        // Misma regla que al editar: el precio de venta solo lo fija el administrador
+        if (dto.getPrecio_venta() != null && dto.getPrecio_venta().signum() != 0 && !esAdminNegocio()) {
+            throw new IllegalArgumentException("Solo el administrador del negocio puede fijar el precio de venta.");
+        }
 
         if (productoRepository.existsByCodigo(dto.getCodigo())) {
             throw new IllegalArgumentException("Ya existe un producto con el código: " + dto.getCodigo());
@@ -114,7 +118,7 @@ public class ProductoServiceImpl implements ProductoService {
         producto.setMarca(buscarMarcaActiva(dto.getId_marca()));
         producto.setUnidad(buscarUnidad(dto.getId_unidad()));
         producto.setProveedor(buscarProveedorActivo(dto.getId_proveedor()));
-        // Sin precios al registrar: quedan en 0 hasta la primera compra
+        // El costo lo fija la primera compra; el precio de venta lo puede registrar el administrador desde ya
         producto.setPrecio_compra(dto.getPrecio_compra() != null ? dto.getPrecio_compra() : BigDecimal.ZERO);
         producto.setPrecio_venta(dto.getPrecio_venta() != null ? dto.getPrecio_venta() : BigDecimal.ZERO);
         producto.setStock_minimo(dto.getStock_minimo());
