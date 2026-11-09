@@ -16,6 +16,7 @@ public record VentaDetalle(
         String direccionCliente,
         Long idMetodo,
         String metodo,
+        String codigoOperacion,
         BigDecimal totSubtotal,
         BigDecimal totIgv,
         BigDecimal totTotal,
@@ -48,7 +49,7 @@ public record VentaDetalle(
 
     public VentaDetalle conLineas(Comprobante comp, List<Linea> lista) {
         return new VentaDetalle(idVenta, numero, fecVenta, idCliente, cliente, tipoDocCliente, numDocCliente,
-                direccionCliente, idMetodo, metodo, totSubtotal, totIgv, totTotal, estado, observacion,
+                direccionCliente, idMetodo, metodo, codigoOperacion, totSubtotal, totIgv, totTotal, estado, observacion,
                 usuario, comp, lista);
     }
 }

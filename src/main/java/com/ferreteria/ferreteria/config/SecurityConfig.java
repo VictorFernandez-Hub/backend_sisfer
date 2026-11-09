@@ -66,12 +66,21 @@ public class SecurityConfig {
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "MOD_BITACORA")
 
                 .requestMatchers("/api/clientes/**").authenticated()
+                // Alta e inactivación de categoría, marca y unidad: quien registra productos
+                .requestMatchers(HttpMethod.POST, "/api/productos/categorias", "/api/productos/marcas", "/api/productos/unidades")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "MOD_PRODUCTOS")
+                .requestMatchers(HttpMethod.PATCH, "/api/productos/categorias/**", "/api/productos/marcas/**", "/api/productos/unidades/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "MOD_PRODUCTOS")
                 .requestMatchers("/api/productos/**", "/api/inventario/**").authenticated()
                 .requestMatchers("/api/proveedores/**").authenticated()
 
                 // MOD_xxx = módulo asignado al rol en "Roles y accesos" (UserDetailsServiceImpl).
                 // Da acceso completo al módulo; así funcionan los roles creados desde la pantalla.
                 // El gerente solo consulta ventas (permiso VTA_VER). El administrador del sistema tiene acceso total.
+                // El mostrador lee el celular y las cuentas. Solo el administrador las cambia.
+                .requestMatchers(HttpMethod.GET, "/api/cobros/datos").authenticated()
+                .requestMatchers("/api/cobros/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "MOD_COBROS")
                 .requestMatchers(HttpMethod.GET, "/api/ventas/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "GERENTE", "ROLE_GERENTE", "MOD_VENTAS")
                 .requestMatchers("/api/ventas/**")
@@ -81,6 +90,9 @@ public class SecurityConfig {
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "GERENTE", "ROLE_GERENTE", "MOD_COMPRAS")
                 .requestMatchers("/api/compras/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "MOD_COMPRAS")
+                // Ajuste de inventario: el gerente solo consulta, no registra mermas ni hallazgos
+                .requestMatchers("/api/ajustes/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO")
                 .requestMatchers("/api/reportes/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "GERENTE", "ROLE_GERENTE")
 

@@ -10,4 +10,10 @@ import java.util.List;
 public interface UnidadRepository extends JpaRepository<Unidad, Integer> {
 
     List<Unidad> findAllByOrderByNombreAsc();
+
+    List<Unidad> findByEstadoOrderByNombreAsc(String estado);
+
+    boolean existsByCodigoIgnoreCase(String codigo);
+
+    boolean existsByNombreIgnoreCase(String nombre);
 }

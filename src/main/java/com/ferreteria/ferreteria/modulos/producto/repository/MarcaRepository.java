@@ -10,4 +10,8 @@ import java.util.List;
 public interface MarcaRepository extends JpaRepository<Marca, Integer> {
 
     List<Marca> findByEstadoOrderByNombreAsc(String estado);
+
+    List<Marca> findAllByOrderByNombreAsc();
+
+    boolean existsByNombreIgnoreCase(String nombre);
 }

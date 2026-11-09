@@ -109,7 +109,8 @@ public class VentaService {
     public VentaDetalle obtener(Long id) {
         List<VentaDetalle> cab = jdbc.query("""
                 SELECT v.id_venta, v.numero, v.fec_venta, v.id_cliente, c.nombres, c.tipo_doc, c.num_doc,
-                       c.direccion, v.id_metodo, m.nombre AS metodo, v.tot_subtotal, v.tot_igv, v.tot_total,
+                       c.direccion, v.id_metodo, m.nombre AS metodo, v.codigo_operacion,
+                       v.tot_subtotal, v.tot_igv, v.tot_total,
                        v.estado, v.observacion, u.cuenta
                 FROM venta v
                 JOIN cliente c ON c.id_cliente = v.id_cliente
@@ -128,6 +129,7 @@ public class VentaService {
                         rs.getString("direccion"),
                         rs.getLong("id_metodo"),
                         rs.getString("metodo"),
+                        rs.getString("codigo_operacion"),
                         rs.getBigDecimal("tot_subtotal"),
                         rs.getBigDecimal("tot_igv"),
                         rs.getBigDecimal("tot_total"),
@@ -206,18 +208,19 @@ public class VentaService {
         KeyHolder keys = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement("""
-                    INSERT INTO venta (id_cliente, id_metodo, id_usuario, numero,
+                    INSERT INTO venta (id_cliente, id_metodo, codigo_operacion, id_usuario, numero,
                                        tot_subtotal, tot_igv, tot_total, estado, observacion)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'BORRADOR', ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BORRADOR', ?)
                     """, Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, req.idCliente());
             ps.setLong(2, req.idMetodo());
-            ps.setInt(3, idUsuario);
-            ps.setString(4, temporal);
-            ps.setBigDecimal(5, t.subtotal());
-            ps.setBigDecimal(6, t.igv());
-            ps.setBigDecimal(7, t.total());
-            ps.setString(8, texto(req.observacion()));
+            ps.setString(3, texto(req.codigoOperacion()));
+            ps.setInt(4, idUsuario);
+            ps.setString(5, temporal);
+            ps.setBigDecimal(6, t.subtotal());
+            ps.setBigDecimal(7, t.igv());
+            ps.setBigDecimal(8, t.total());
+            ps.setString(9, texto(req.observacion()));
             return ps;
         }, keys);
 
@@ -271,9 +274,9 @@ public class VentaService {
 
         jdbc.update("""
                 UPDATE venta
-                SET id_cliente = ?, id_metodo = ?, tot_subtotal = ?, tot_igv = ?, tot_total = ?, observacion = ?
+                SET id_cliente = ?, id_metodo = ?, codigo_operacion = ?, tot_subtotal = ?, tot_igv = ?, tot_total = ?, observacion = ?
                 WHERE id_venta = ? AND estado = 'BORRADOR'
-                """, req.idCliente(), req.idMetodo(), t.subtotal(), t.igv(), t.total(),
+                """, req.idCliente(), req.idMetodo(), texto(req.codigoOperacion()), t.subtotal(), t.igv(), t.total(),
                 texto(req.observacion()), id);
         jdbc.update("DELETE FROM linea_venta WHERE id_venta = ?", id);
         guardarLineas(id, lineas);
@@ -394,6 +397,20 @@ public class VentaService {
         }
         if ("CREDITO".equals(metodo.get(0)) && DOC_CLIENTE_VARIOS.equals(doc.get(0))) {
             throw new IllegalArgumentException("El crédito interno se da a un cliente identificado. Elija al cliente o cambie el medio de pago");
+        }
+        String codigo = metodo.get(0);
+        String operacion = req.codigoOperacion() == null ? "" : req.codigoOperacion().trim().toUpperCase();
+        if ("YAPE".equals(codigo) || "PLIN".equals(codigo)) {
+            if (operacion.length() < 4) {
+                throw new IllegalArgumentException("Indique el código de operación que muestra el celular del cliente.");
+            }
+        } else if ("TRANSFERENCIA".equals(codigo)) {
+            String[] partes = operacion.split("\\|", 2);
+            boolean bancoOk = partes.length == 2
+                    && java.util.Set.of("BCP", "BBVA", "INTERBANK", "SCOTIABANK").contains(partes[0]);
+            if (!bancoOk || partes[1].trim().length() < 4) {
+                throw new IllegalArgumentException("Elija el banco y escriba el número de operación de la transferencia.");
+            }
         }
     }
 

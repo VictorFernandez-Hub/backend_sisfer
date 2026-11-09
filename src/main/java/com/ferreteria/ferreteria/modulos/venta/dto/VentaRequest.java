@@ -18,6 +18,7 @@ public record VentaRequest(
         @NotNull(message = "Seleccione un cliente") Long idCliente,
         @NotNull(message = "Seleccione el medio de pago") Long idMetodo,
         @Size(max = 300, message = "La observación admite hasta 300 caracteres") String observacion,
+        @Size(max = 40, message = "El código de operación admite hasta 40 caracteres") String codigoOperacion,
         @NotEmpty(message = "Agregue al menos un producto") @Valid List<LineaRequest> lineas
 ) {
     public record LineaRequest(
