@@ -119,6 +119,9 @@ public class UsuarioService {
         u.setFecFin(aFecha(datos.get("fecFin")));
 
         if (datos.get("estado") != null) {
+            if ("BLOQUEADO".equalsIgnoreCase(datos.get("estado"))) {
+                throw new RuntimeException("El bloqueo lo aplica el sistema tras tres intentos fallidos. Elija Activo para rehabilitar la cuenta.");
+            }
             u.setEstado(datos.get("estado"));
             if ("ACTIVO".equalsIgnoreCase(datos.get("estado"))) {
                 u.setNumIntentos((short) 0);

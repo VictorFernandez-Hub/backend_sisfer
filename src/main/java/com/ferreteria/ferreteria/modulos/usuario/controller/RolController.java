@@ -25,7 +25,7 @@ public class RolController {
      * roles administradores que gestionan usuarios y asignan módulos a los demás.
      */
     public static final Set<String> MODULOS_ASIGNABLES = Set.of(
-            "CLIENTES", "PRODUCTOS", "PROVEEDORES", "VENTAS", "COMPRAS", "INVENTARIO", "KARDEX",
+            "CLIENTES", "PRODUCTOS", "PROVEEDORES", "VENTAS", "COBROS", "COMPRAS", "INVENTARIO", "KARDEX",
             "USUARIOS", "ROLES", "BITACORA");
 
     private final RolRepository rolRepository;

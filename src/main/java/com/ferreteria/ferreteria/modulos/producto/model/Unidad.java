@@ -17,6 +17,12 @@ public class Unidad {
     @Column(name = "nombre", nullable = false, length = 40)
     private String nombre;
 
+    @Column(name = "entera", nullable = false)
+    private boolean entera = true;
+
+    @Column(name = "estado", nullable = false, length = 10)
+    private String estado = "ACTIVO";
+
     public Unidad() {}
 
     public Integer getId_unidad() { return id_unidad; }
@@ -27,4 +33,10 @@ public class Unidad {
 
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
+
+    public boolean isEntera() { return entera; }
+    public void setEntera(boolean entera) { this.entera = entera; }
+
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
 }

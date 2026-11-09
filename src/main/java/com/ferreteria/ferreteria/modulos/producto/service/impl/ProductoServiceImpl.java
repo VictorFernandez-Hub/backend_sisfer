@@ -125,9 +125,15 @@ public class ProductoServiceImpl implements ProductoService {
         producto.setEstado(dto.getEstado() != null ? dto.getEstado() : "ACTIVO");
         // stock_actual NO se asigna con JPA: si hay stock inicial entra como ajuste + kardex
 
+        BigDecimal stockInicial = dto.getStock_inicial();
+        if (stockInicial != null && stockInicial.compareTo(BigDecimal.ZERO) > 0
+                && (dto.getPrecio_compra() == null || dto.getPrecio_compra().compareTo(BigDecimal.ZERO) <= 0)) {
+            throw new IllegalArgumentException(
+                    "El stock inicial necesita un costo de apertura mayor que cero. Si no conoce el costo, deje el stock en 0 y regístrelo con una compra.");
+        }
+
         Producto guardado = productoRepository.saveAndFlush(producto);
 
-        BigDecimal stockInicial = dto.getStock_inicial();
         if (stockInicial != null && stockInicial.compareTo(BigDecimal.ZERO) > 0) {
             registrarStockInicial(guardado, stockInicial);
             guardado.setStock_actual(stockInicial); // Solo para la respuesta; JPA no escribe esta columna
@@ -312,9 +318,140 @@ public class ProductoServiceImpl implements ProductoService {
     @Override
     @Transactional(readOnly = true)
     public List<CatalogoDTO> listarUnidades() {
-        return unidadRepository.findAllByOrderByNombreAsc().stream()
-                .map(u -> new CatalogoDTO(u.getId_unidad(), u.getCodigo(), u.getNombre()))
+        return unidadRepository.findByEstadoOrderByNombreAsc("ACTIVO").stream()
+                .map(this::aCatalogo)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CatalogoDTO> listarCategoriasTodas() {
+        return categoriaRepository.findAllByOrderByNombreAsc().stream().map(this::aCatalogo).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CatalogoDTO> listarMarcasTodas() {
+        return marcaRepository.findAllByOrderByNombreAsc().stream().map(this::aCatalogo).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CatalogoDTO> listarUnidadesTodas() {
+        return unidadRepository.findAllByOrderByNombreAsc().stream().map(this::aCatalogo).toList();
+    }
+
+    @Override
+    @Transactional
+    public CatalogoDTO crearCategoria(String nombre) {
+        String limpio = nombreCatalogo(nombre, 80, "categoría");
+        if (categoriaRepository.existsByNombreIgnoreCase(limpio)) {
+            throw new IllegalArgumentException("Ya existe una categoría llamada \"" + limpio + "\".");
+        }
+        Categoria categoria = new Categoria();
+        categoria.setNombre(limpio);
+        categoria.setEstado("ACTIVO");
+        return aCatalogo(categoriaRepository.save(categoria));
+    }
+
+    @Override
+    @Transactional
+    public CatalogoDTO crearMarca(String nombre) {
+        String limpio = nombreCatalogo(nombre, 80, "marca");
+        if (marcaRepository.existsByNombreIgnoreCase(limpio)) {
+            throw new IllegalArgumentException("Ya existe una marca llamada \"" + limpio + "\".");
+        }
+        Marca marca = new Marca();
+        marca.setNombre(limpio);
+        marca.setEstado("ACTIVO");
+        return aCatalogo(marcaRepository.save(marca));
+    }
+
+    @Override
+    @Transactional
+    public CatalogoDTO crearUnidad(String codigo, String nombre, boolean entera) {
+        String cod = codigoUnidad(codigo);
+        String limpio = nombreCatalogo(nombre, 40, "unidad");
+        if (unidadRepository.existsByCodigoIgnoreCase(cod)) {
+            throw new IllegalArgumentException("Ya existe una unidad con el código " + cod + ".");
+        }
+        if (unidadRepository.existsByNombreIgnoreCase(limpio)) {
+            throw new IllegalArgumentException("Ya existe una unidad llamada \"" + limpio + "\".");
+        }
+        Unidad unidad = new Unidad();
+        unidad.setCodigo(cod);
+        unidad.setNombre(limpio);
+        unidad.setEntera(entera);
+        unidad.setEstado("ACTIVO");
+        return aCatalogo(unidadRepository.save(unidad));
+    }
+
+    @Override
+    @Transactional
+    public void cambiarEstadoCategoria(Integer id, String estado) {
+        Categoria categoria = categoriaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada"));
+        categoria.setEstado(estadoCatalogo(estado));
+    }
+
+    @Override
+    @Transactional
+    public void cambiarEstadoMarca(Integer id, String estado) {
+        Marca marca = marcaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Marca no encontrada"));
+        marca.setEstado(estadoCatalogo(estado));
+    }
+
+    @Override
+    @Transactional
+    public void cambiarEstadoUnidad(Integer id, String estado) {
+        Unidad unidad = unidadRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Unidad no encontrada"));
+        unidad.setEstado(estadoCatalogo(estado));
+    }
+
+    private CatalogoDTO aCatalogo(Categoria categoria) {
+        CatalogoDTO dto = new CatalogoDTO(categoria.getId_categoria(), null, categoria.getNombre());
+        dto.setEstado(categoria.getEstado());
+        return dto;
+    }
+
+    private CatalogoDTO aCatalogo(Marca marca) {
+        CatalogoDTO dto = new CatalogoDTO(marca.getId_marca(), null, marca.getNombre());
+        dto.setEstado(marca.getEstado());
+        return dto;
+    }
+
+    private CatalogoDTO aCatalogo(Unidad unidad) {
+        CatalogoDTO dto = new CatalogoDTO(unidad.getId_unidad(), unidad.getCodigo(), unidad.getNombre());
+        dto.setEstado(unidad.getEstado());
+        dto.setEntera(unidad.isEntera());
+        return dto;
+    }
+
+    private String nombreCatalogo(String crudo, int maximo, String etiqueta) {
+        String nombre = crudo == null ? "" : crudo.trim().replaceAll("\\s+", " ");
+        if (nombre.isEmpty()) {
+            throw new IllegalArgumentException("Indique el nombre de la " + etiqueta + ".");
+        }
+        if (nombre.length() > maximo) {
+            throw new IllegalArgumentException("El nombre admite hasta " + maximo + " caracteres.");
+        }
+        return nombre;
+    }
+
+    private String codigoUnidad(String crudo) {
+        String codigo = crudo == null ? "" : crudo.trim().toUpperCase();
+        if (!codigo.matches("[A-Z]{1,10}")) {
+            throw new IllegalArgumentException("El código de la unidad son de 1 a 10 letras. Ejemplo: GLN.");
+        }
+        return codigo;
+    }
+
+    private String estadoCatalogo(String estado) {
+        if ("ACTIVO".equalsIgnoreCase(estado)) return "ACTIVO";
+        if ("INACTIVO".equalsIgnoreCase(estado)) return "INACTIVO";
+        throw new IllegalArgumentException("El estado debe ser Activo o Inactivo.");
     }
 
     // =========================================================================
@@ -467,6 +604,7 @@ public class ProductoServiceImpl implements ProductoService {
         dto.setId_unidad(producto.getUnidad().getId_unidad());
         dto.setUnidad(producto.getUnidad().getNombre());
         dto.setUnidad_codigo(producto.getUnidad().getCodigo());
+        dto.setUnidad_entera(producto.getUnidad().isEntera());
         if (producto.getProveedor() != null) {
             dto.setId_proveedor(producto.getProveedor().getId_proveedor());
             dto.setProveedor(producto.getProveedor().getRazon_social());

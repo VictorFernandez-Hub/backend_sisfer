@@ -44,6 +44,7 @@ public class ProductoDTO {
     private String marca;
     private String unidad;
     private String unidad_codigo;
+    private Boolean unidad_entera;
 
     // ----- Precios en soles (opcionales: el de compra lo actualiza sp_confirmar_compra) -----
     @DecimalMin(value = "0.00", message = "El precio de compra no puede ser negativo")
@@ -120,6 +121,9 @@ public class ProductoDTO {
 
     public String getUnidad_codigo() { return unidad_codigo; }
     public void setUnidad_codigo(String unidad_codigo) { this.unidad_codigo = unidad_codigo; }
+
+    public Boolean getUnidad_entera() { return unidad_entera; }
+    public void setUnidad_entera(Boolean unidad_entera) { this.unidad_entera = unidad_entera; }
 
     public BigDecimal getPrecio_compra() { return precio_compra; }
     public void setPrecio_compra(BigDecimal precio_compra) { this.precio_compra = precio_compra; }

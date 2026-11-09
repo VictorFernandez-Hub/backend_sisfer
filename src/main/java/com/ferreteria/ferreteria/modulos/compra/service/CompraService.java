@@ -150,14 +150,15 @@ public class CompraService {
             }
         }
 
-        // Totales en soles
-        BigDecimal subtotal = BigDecimal.ZERO;
+        // El costo de cada línea ya incluye IGV (así factura el proveedor).
+        // El total es la suma de las líneas; la base y el IGV se separan de ese total.
+        BigDecimal total = BigDecimal.ZERO;
         for (CompraRequest.LineaRequest l : req.lineas()) {
-            subtotal = subtotal.add(totalLinea(l));
+            total = total.add(totalLinea(l));
         }
-        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal igv = subtotal.multiply(tasaIgv()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal total = subtotal.add(igv);
+        total = total.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal subtotal = total.divide(BigDecimal.ONE.add(tasaIgv()), 2, RoundingMode.HALF_UP);
+        BigDecimal igv = total.subtract(subtotal);
 
         // Cabecera (con un número temporal; luego se pone OC-0001, OC-0002...)
         String temporal = "TMP-" + UUID.randomUUID().toString().substring(0, 12);

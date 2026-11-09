@@ -92,18 +92,70 @@ public class ProductoController {
     // =========================================================================
 
     @GetMapping("/categorias")
-    public ResponseEntity<List<CatalogoDTO>> listarCategorias() {
-        return ResponseEntity.ok(productoService.listarCategorias());
+    public ResponseEntity<List<CatalogoDTO>> listarCategorias(
+            @RequestParam(defaultValue = "false") boolean todas) {
+        return ResponseEntity.ok(todas ? productoService.listarCategoriasTodas() : productoService.listarCategorias());
+    }
+
+    @PostMapping("/categorias")
+    public ResponseEntity<CatalogoDTO> crearCategoria(@RequestBody Map<String, String> body) {
+        CatalogoDTO creada = productoService.crearCategoria(body.get("nombre"));
+        bitacora.registrar("PRODUCTOS", "REGISTRAR", "Registró la categoría " + creada.getNombre());
+        return new ResponseEntity<>(creada, HttpStatus.CREATED);
+    }
+
+    @PatchMapping("/categorias/{id}/estado")
+    public ResponseEntity<Void> estadoCategoria(@PathVariable Integer id, @RequestParam String estado) {
+        productoService.cambiarEstadoCategoria(id, estado);
+        bitacora.registrar("PRODUCTOS", "EDITAR", "Puso la categoría " + id + " en " + estado);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/marcas")
-    public ResponseEntity<List<CatalogoDTO>> listarMarcas() {
-        return ResponseEntity.ok(productoService.listarMarcas());
+    public ResponseEntity<List<CatalogoDTO>> listarMarcas(
+            @RequestParam(defaultValue = "false") boolean todas) {
+        return ResponseEntity.ok(todas ? productoService.listarMarcasTodas() : productoService.listarMarcas());
+    }
+
+    @PostMapping("/marcas")
+    public ResponseEntity<CatalogoDTO> crearMarca(@RequestBody Map<String, String> body) {
+        CatalogoDTO creada = productoService.crearMarca(body.get("nombre"));
+        bitacora.registrar("PRODUCTOS", "REGISTRAR", "Registró la marca " + creada.getNombre());
+        return new ResponseEntity<>(creada, HttpStatus.CREATED);
+    }
+
+    @PatchMapping("/marcas/{id}/estado")
+    public ResponseEntity<Void> estadoMarca(@PathVariable Integer id, @RequestParam String estado) {
+        productoService.cambiarEstadoMarca(id, estado);
+        bitacora.registrar("PRODUCTOS", "EDITAR", "Puso la marca " + id + " en " + estado);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/unidades")
-    public ResponseEntity<List<CatalogoDTO>> listarUnidades() {
-        return ResponseEntity.ok(productoService.listarUnidades());
+    public ResponseEntity<List<CatalogoDTO>> listarUnidades(
+            @RequestParam(defaultValue = "false") boolean todas) {
+        return ResponseEntity.ok(todas ? productoService.listarUnidadesTodas() : productoService.listarUnidades());
+    }
+
+    @PostMapping("/unidades")
+    public ResponseEntity<CatalogoDTO> crearUnidad(@RequestBody Map<String, Object> body) {
+        Object flag = body.get("entera");
+        boolean entera = !(flag instanceof Boolean) || (Boolean) flag;
+        if (flag instanceof String texto) {
+            entera = Boolean.parseBoolean(texto);
+        }
+        String codigo = body.get("codigo") == null ? null : body.get("codigo").toString();
+        String nombre = body.get("nombre") == null ? null : body.get("nombre").toString();
+        CatalogoDTO creada = productoService.crearUnidad(codigo, nombre, entera);
+        bitacora.registrar("PRODUCTOS", "REGISTRAR", "Registró la unidad " + creada.getCodigo());
+        return new ResponseEntity<>(creada, HttpStatus.CREATED);
+    }
+
+    @PatchMapping("/unidades/{id}/estado")
+    public ResponseEntity<Void> estadoUnidad(@PathVariable Integer id, @RequestParam String estado) {
+        productoService.cambiarEstadoUnidad(id, estado);
+        bitacora.registrar("PRODUCTOS", "EDITAR", "Puso la unidad " + id + " en " + estado);
+        return ResponseEntity.noContent().build();
     }
 
     // =========================================================================

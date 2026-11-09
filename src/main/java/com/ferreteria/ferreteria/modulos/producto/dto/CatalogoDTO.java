@@ -9,6 +9,8 @@ public class CatalogoDTO {
     private Integer id;
     private String codigo; // Solo lo usan las unidades (UND, KG, M...)
     private String nombre;
+    private String estado;
+    private Boolean entera;
 
     public CatalogoDTO() {}
 
@@ -26,4 +28,10 @@ public class CatalogoDTO {
 
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
+
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+
+    public Boolean getEntera() { return entera; }
+    public void setEntera(Boolean entera) { this.entera = entera; }
 }

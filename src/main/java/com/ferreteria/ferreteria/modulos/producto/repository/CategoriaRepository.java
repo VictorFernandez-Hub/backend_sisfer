@@ -10,4 +10,8 @@ import java.util.List;
 public interface CategoriaRepository extends JpaRepository<Categoria, Integer> {
 
     List<Categoria> findByEstadoOrderByNombreAsc(String estado);
+
+    List<Categoria> findAllByOrderByNombreAsc();
+
+    boolean existsByNombreIgnoreCase(String nombre);
 }
