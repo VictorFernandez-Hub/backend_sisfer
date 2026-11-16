@@ -73,6 +73,7 @@ public class SecurityConfig {
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "ALMACENERO", "ROLE_ALMACENERO", "MOD_PRODUCTOS")
                 .requestMatchers("/api/productos/**", "/api/inventario/**").authenticated()
                 .requestMatchers("/api/proveedores/**").authenticated()
+                .requestMatchers("/api/consulta/**").authenticated()
 
                 // MOD_xxx = módulo asignado al rol en "Roles y accesos" (UserDetailsServiceImpl).
                 // Da acceso completo al módulo; así funcionan los roles creados desde la pantalla.
