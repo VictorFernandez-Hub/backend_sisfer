@@ -1,6 +1,7 @@
 package com.ferreteria.ferreteria.modulos.venta.service;
 
 import com.ferreteria.ferreteria.excepciones.ResourceNotFoundException;
+import com.ferreteria.ferreteria.modulos.caja.service.CajaService;
 import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
 import com.ferreteria.ferreteria.modulos.usuario.model.Usuario;
 import com.ferreteria.ferreteria.modulos.usuario.repository.UsuarioRepository;
@@ -58,11 +59,14 @@ public class VentaService {
     private final JdbcTemplate jdbc;
     private final UsuarioRepository usuarioRepository;
     private final BitacoraService bitacora;
+    private final CajaService cajaService;
 
-    public VentaService(JdbcTemplate jdbc, UsuarioRepository usuarioRepository, BitacoraService bitacora) {
+    public VentaService(JdbcTemplate jdbc, UsuarioRepository usuarioRepository, BitacoraService bitacora,
+                        CajaService cajaService) {
         this.jdbc = jdbc;
         this.usuarioRepository = usuarioRepository;
         this.bitacora = bitacora;
+        this.cajaService = cajaService;
     }
 
     // ------------------------------------------------------------------ consultas
@@ -239,7 +243,8 @@ public class VentaService {
 
     /** Revisa una venta de mostrador antes de guardarla, para no dejar borradores de intentos fallidos. */
     public void validarCobro(VentaRequest req, Long idTipoComp) {
-        idUsuarioActual();
+        // Sin caja abierta no se cobra: se avisa antes de guardar nada
+        cajaService.cajaParaCobrar(idUsuarioActual());
         validarCabecera(req);
         Totales t = totales(calcularLineas(req, Map.of()));
         Map<String, Object> cliente = jdbc.queryForMap(
@@ -300,6 +305,9 @@ public class VentaService {
             throw new IllegalArgumentException("Solo se confirma una venta en BORRADOR");
         }
 
+        // El dinero entra a la caja de quien cobra: debe tenerla abierta y del día
+        Long idCaja = cajaService.cajaParaCobrar(idUsuario);
+
         validarComprobante(idTipoComp, v.tipoDocCliente(), v.numDocCliente(), v.totTotal());
 
         // Stock: se avisa qué producto no alcanza (el procedimiento lo vuelve a revisar con bloqueo)
@@ -322,6 +330,7 @@ public class VentaService {
             cs.setInt(2, idUsuario);
             cs.setLong(3, idTipoComp);
         });
+        jdbc.update("UPDATE venta SET id_caja = ? WHERE id_venta = ? AND estado = 'CONFIRMADA'", idCaja, id);
     }
 
     /**
