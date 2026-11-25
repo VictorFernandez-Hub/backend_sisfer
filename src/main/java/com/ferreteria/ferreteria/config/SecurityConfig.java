@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -16,6 +17,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -81,6 +83,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/cobros/datos").authenticated()
                 .requestMatchers("/api/cobros/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "MOD_COBROS")
+                // Caja del turno: la abre y cierra quien cobra. El gerente solo consulta el historial
+                .requestMatchers(HttpMethod.GET, "/api/caja/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "GERENTE", "ROLE_GERENTE", "MOD_VENTAS")
+                .requestMatchers("/api/caja/**")
+                    .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "MOD_VENTAS")
                 .requestMatchers(HttpMethod.GET, "/api/ventas/**")
                     .hasAnyAuthority("ADMIN_SISTEMA", "ROLE_ADMIN_SISTEMA", "ADMIN_NEGOCIO", "ROLE_ADMIN_NEGOCIO", "VENDEDOR", "ROLE_VENDEDOR", "GERENTE", "ROLE_GERENTE", "MOD_VENTAS")
                 .requestMatchers("/api/ventas/**")
@@ -99,7 +106,11 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             // Un usuario con sesión que intenta usar algo que su rol no permite queda en la bitácora
-            .exceptionHandling(ex -> ex.accessDeniedHandler((request, response, denegado) -> {
+            .exceptionHandling(ex -> ex
+                // Sin sesión (expiró o se reinició el servidor): 401 para que el frontend lleve al login.
+                // Sin esto Spring responde 403 y la pantalla dice "no tiene permisos" aunque el rol sí los tenga
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                .accessDeniedHandler((request, response, denegado) -> {
                 String ruta = request.getRequestURI();
                 String[] partes = ruta.split("/");
                 String modulo = partes.length > 2 ? partes[2].toUpperCase() : "SISTEMA";

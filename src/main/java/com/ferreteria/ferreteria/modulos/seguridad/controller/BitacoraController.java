@@ -24,6 +24,7 @@ public class BitacoraController {
             Map.entry("proveedores", "PROVEEDORES"),
             Map.entry("ventas", "VENTAS"),
             Map.entry("cobros", "COBROS"),
+            Map.entry("caja", "CAJA"),
             Map.entry("compras", "COMPRAS"),
             Map.entry("inventario", "INVENTARIO"),
             Map.entry("kardex", "KARDEX"),
