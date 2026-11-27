@@ -6,14 +6,15 @@ import com.ferreteria.ferreteria.modulos.reporte.dto.RangoReporte;
 import com.ferreteria.ferreteria.modulos.reporte.dto.ResumenReporte;
 import com.ferreteria.ferreteria.modulos.reporte.dto.VentaPorMetodo;
 import com.ferreteria.ferreteria.modulos.reporte.dto.VentaPorVendedor;
+import com.ferreteria.ferreteria.modulos.reporte.dto.VentaRegistro;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Reporte de ventas de solo lectura, más las alertas de stock.
@@ -54,15 +55,47 @@ public class ReporteService {
                 LEFT JOIN comprobante cp ON cp.id_venta = v.id_venta
                 WHERE v.fec_venta >= ? AND v.fec_venta < ?
                 """,
+                (rs, i) -> new ResumenReporte(r.desde(), r.hasta(),
+                        rs.getBigDecimal("vendido").setScale(2, RoundingMode.HALF_UP),
+                        rs.getLong("num_ventas"), rs.getLong("num_anuladas"),
+                        rs.getBigDecimal("monto_anuladas").setScale(2, RoundingMode.HALF_UP)),
+                inicio(r), fin(r));
+    }
+
+    /**
+     * Las ventas del periodo una por una, de la más reciente a la más antigua.
+     * estado: TODAS (o vacío), CONFIRMADA o ANULADA. Igual que en el resumen, una anulada
+     * solo cuenta si llegó a cobrarse (tiene comprobante).
+     */
+    public List<VentaRegistro> registro(RangoReporte r, String estado) {
+        String filtro = estado == null || estado.isBlank() ? "TODAS" : estado.trim().toUpperCase(Locale.ROOT);
+        String condicion = switch (filtro) {
+            case "TODAS" -> "(v.estado = 'CONFIRMADA' OR (v.estado = 'ANULADA' AND cp.id_venta IS NOT NULL))";
+            case "CONFIRMADA" -> "v.estado = 'CONFIRMADA'";
+            case "ANULADA" -> "v.estado = 'ANULADA' AND cp.id_venta IS NOT NULL";
+            default -> throw new IllegalArgumentException("El estado debe ser TODAS, CONFIRMADA o ANULADA.");
+        };
+        return jdbc.query("""
+                SELECT v.numero, v.fec_venta, cp.serie, cp.numero AS num_comp, c.nombres AS cliente,
+                       TRIM(CONCAT(u.nombres, ' ', u.apellidos)) AS vendedor, m.nombre AS metodo,
+                       v.tot_total, v.estado
+                FROM venta v
+                LEFT JOIN comprobante cp ON cp.id_venta = v.id_venta
+                JOIN cliente c ON c.id_cliente = v.id_cliente
+                JOIN usuario u ON u.id_usuario = v.id_usuario
+                JOIN metodo m ON m.id_metodo = v.id_metodo
+                WHERE v.fec_venta >= ? AND v.fec_venta < ? AND %s
+                ORDER BY v.fec_venta DESC, v.id_venta DESC
+                """.formatted(condicion),
                 (rs, i) -> {
-                    BigDecimal vendido = rs.getBigDecimal("vendido");
-                    long numVentas = rs.getLong("num_ventas");
-                    BigDecimal ticket = numVentas == 0
-                            ? BigDecimal.ZERO.setScale(2)
-                            : vendido.divide(BigDecimal.valueOf(numVentas), 2, RoundingMode.HALF_UP);
-                    return new ResumenReporte(r.desde(), r.hasta(), vendido.setScale(2, RoundingMode.HALF_UP),
-                            numVentas, ticket, rs.getLong("num_anuladas"),
-                            rs.getBigDecimal("monto_anuladas").setScale(2, RoundingMode.HALF_UP));
+                    String serie = rs.getString("serie");
+                    long num = rs.getLong("num_comp");
+                    // Mismo formato que el comprobante: B001-00000012
+                    String comprobante = serie == null ? "" : serie + "-" + String.format("%08d", num);
+                    return new VentaRegistro(rs.getString("numero"),
+                            rs.getTimestamp("fec_venta").toLocalDateTime(), comprobante,
+                            rs.getString("cliente"), rs.getString("vendedor"), rs.getString("metodo"),
+                            rs.getBigDecimal("tot_total"), rs.getString("estado"));
                 },
                 inicio(r), fin(r));
     }

@@ -12,7 +12,6 @@ public record ResumenReporte(
         LocalDate hasta,
         BigDecimal totalVendido,
         long numVentas,
-        BigDecimal ticketPromedio,
         long numAnuladas,
         BigDecimal montoAnuladas
 ) {}

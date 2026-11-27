@@ -113,13 +113,12 @@ public class ReportePdfService {
 
     private void seccionResumen(Document doc, ResumenReporte r) throws DocumentException {
         doc.add(tituloSeccion("1. Resumen"));
-        PdfPTable t = new PdfPTable(4);
+        PdfPTable t = new PdfPTable(3);
         t.setWidthPercentage(100);
         t.setSpacingAfter(6f);
         tarjeta(t, "Total vendido", "S/ " + dinero(r.totalVendido()));
-        tarjeta(t, "N.º de ventas", String.valueOf(r.numVentas()));
-        tarjeta(t, "Ticket promedio", "S/ " + dinero(r.ticketPromedio()));
-        tarjeta(t, "Anuladas", r.numAnuladas() + "  (S/ " + dinero(r.montoAnuladas()) + ")");
+        tarjeta(t, "Ventas confirmadas", String.valueOf(r.numVentas()));
+        tarjeta(t, "Ventas anuladas", r.numAnuladas() + "  (S/ " + dinero(r.montoAnuladas()) + ")");
         doc.add(t);
     }
 

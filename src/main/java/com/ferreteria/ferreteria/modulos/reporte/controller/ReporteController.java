@@ -6,6 +6,8 @@ import com.ferreteria.ferreteria.modulos.reporte.dto.RangoReporte;
 import com.ferreteria.ferreteria.modulos.reporte.dto.ResumenReporte;
 import com.ferreteria.ferreteria.modulos.reporte.dto.VentaPorMetodo;
 import com.ferreteria.ferreteria.modulos.reporte.dto.VentaPorVendedor;
+import com.ferreteria.ferreteria.modulos.reporte.dto.VentaRegistro;
+import com.ferreteria.ferreteria.modulos.reporte.service.ReporteExcelService;
 import com.ferreteria.ferreteria.modulos.reporte.service.ReportePdfService;
 import com.ferreteria.ferreteria.modulos.reporte.service.ReporteService;
 import com.ferreteria.ferreteria.modulos.seguridad.service.BitacoraService;
@@ -41,11 +43,14 @@ public class ReporteController {
 
     private final ReporteService reporteService;
     private final ReportePdfService reportePdf;
+    private final ReporteExcelService reporteExcel;
     private final BitacoraService bitacora;
 
-    public ReporteController(ReporteService reporteService, ReportePdfService reportePdf, BitacoraService bitacora) {
+    public ReporteController(ReporteService reporteService, ReportePdfService reportePdf,
+                             ReporteExcelService reporteExcel, BitacoraService bitacora) {
         this.reporteService = reporteService;
         this.reportePdf = reportePdf;
+        this.reporteExcel = reporteExcel;
         this.bitacora = bitacora;
     }
 
@@ -78,6 +83,15 @@ public class ReporteController {
         return ResponseEntity.ok(reporteService.porVendedor(reporteService.rango(desde, hasta)));
     }
 
+    /** Las ventas del periodo una por una. ?estado=TODAS (por defecto), CONFIRMADA o ANULADA. */
+    @GetMapping("/ventas")
+    public ResponseEntity<List<VentaRegistro>> ventas(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam(required = false) String estado) {
+        return ResponseEntity.ok(reporteService.registro(reporteService.rango(desde, hasta), estado));
+    }
+
     /** El stock de ahora: no depende de fechas. */
     @GetMapping("/alertas-stock")
     public ResponseEntity<List<AlertaStock>> alertasStock() {
@@ -99,6 +113,23 @@ public class ReporteController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(nombre).build().toString())
                 .body(pdf);
+    }
+
+    /** El mismo reporte en Excel, con una hoja más: todas las ventas del periodo (confirmadas y anuladas). */
+    @GetMapping("/excel")
+    public ResponseEntity<byte[]> excel(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+        RangoReporte r = reporteService.rango(desde, hasta);
+        byte[] excel = reporteExcel.generar(r, reporteService.resumen(r), reporteService.registro(r, "TODAS"),
+                reporteService.porMetodo(r), reporteService.topProductos(r, 10), reporteService.porVendedor(r));
+        String nombre = "Reporte-ventas-" + r.desde() + "_" + r.hasta() + ".xlsx";
+        bitacora.registrar("REPORTES", "DESCARGAR",
+                "Descargó el reporte de ventas en Excel del " + r.desde().format(FECHA) + " al " + r.hasta().format(FECHA));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(nombre).build().toString())
+                .body(excel);
     }
 
     // ----------------------------------------------------------- errores
